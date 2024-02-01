@@ -3,7 +3,7 @@ from pathlib import Path
 from pdfminer.high_level import extract_text
 
 """Parse a PDF log into a CSV."""
-def parse(path: Path):
+def log_parser(path: Path):
     text: str = extract_text(path)
     records: list[str] = text.split("\n\n")
 
