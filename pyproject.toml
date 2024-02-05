@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "pdf-log-to-dataframe-csv"
+version = "0.1.0"
+description = ""
+authors = ["Theo <temp@temp.com>"]
+license = "GPL3"
+readme = "README.md"
+packages = [{include = "pdf_log_to_dataframe_csv"}]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+"pdfminer.six" = "^20231228"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.1.14"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
