@@ -1,11 +1,52 @@
+import datetime
+import logging
+from dataclasses import dataclass
 from pathlib import Path
+from collections import namedtuple
 
 from pdfminer.high_level import extract_text
 
+@dataclass
+class Record:
+    par_id: str
+    tax_year: int
+    jur: int
+    procedure: str
+    error: str
+
+class AALog:
+    date: datetime.date | None
+    title: str
+    records: list[Record]
+
+Header = namedtuple("Header", ["date", "title"])
+
+def parse_header(raw: list[str]) -> tuple[Header, list[str]]:
+    if not len(raw):
+        raise RuntimeError("Empty raw logs")
+
+    header: list[str] = raw[0].split()
+
+    # Title case because the month is all caps in the log
+    date_parts: str = header[0].title()
+    date: None | datetime.date = None
+    try:
+        date = datetime.datetime.strptime(date_parts, "%d-%b-%Y").date()
+    except Exception as e:
+        logging.warn(f"Couldn't parse date: {e}")
+
+    title: str = ""
+    for piece in header:
+        if piece[0] and piece[0].isalpha() and not piece.startswith("PAGE"):
+            title += piece
+
+    parsed: Header = Header(date, title)
+    return (parsed, raw[1:])
+
+
 """Parse a PDF log into a CSV."""
 def log_parser(path: Path):
-    text: str = extract_text(path)
-    records: list[str] = text.split("\n\n")
+    records: list[str] = extract_text(path).splitlines()
 
     # Process records by splitting on '|'
     parids: list[str] = []
@@ -41,4 +82,10 @@ def log_parser(path: Path):
             print(f"Skipping record (incorrect structure): {record}")
 
         # TODO: Save to CSV
+
+    print(f"parids: {parids}")
+    print(f"taxyrs: {taxyrs}")
+    print(f"jurs: {jurs}")
+    print(f"procedures: {procedures}")
+    print(f"errgmsg: {errmsgs}")
 
