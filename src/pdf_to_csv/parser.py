@@ -1,8 +1,8 @@
 import datetime
 import logging
+from collections import namedtuple
 from dataclasses import dataclass
 from pathlib import Path
-from collections import namedtuple
 
 from pdfminer.high_level import extract_text
 
@@ -19,7 +19,10 @@ class AALog:
     title: str
     records: list[Record]
 
-Header = namedtuple("Header", ["date", "title"])
+@dataclass
+class Header:
+    date: datetime.date | None
+    title: str
 
 def parse_header(raw: list[str]) -> tuple[Header, list[str]]:
     if not len(raw):
@@ -43,6 +46,8 @@ def parse_header(raw: list[str]) -> tuple[Header, list[str]]:
     parsed: Header = Header(date, title)
     return (parsed, raw[1:])
 
+def parse_row(raw: list[str]) -> tuple[Row, list[str]]:
+    pass
 
 """Parse a PDF log into a CSV."""
 def log_parser(path: Path):
