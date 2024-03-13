@@ -1,10 +1,13 @@
 import datetime
 import logging
-from collections import namedtuple
+import regex as re
 from dataclasses import dataclass
 from pathlib import Path
 
 from pdfminer.high_level import extract_text
+
+DASH_MATCHER: re.Pattern = re.compile("^-+$")
+
 
 @dataclass
 class Record:
@@ -14,15 +17,18 @@ class Record:
     procedure: str
     error: str
 
+
 class AALog:
     date: datetime.date | None
     title: str
     records: list[Record]
 
+
 @dataclass
 class Header:
     date: datetime.date | None
     title: str
+
 
 def parse_header(raw: list[str]) -> tuple[Header, list[str]]:
     if not len(raw):
@@ -46,10 +52,51 @@ def parse_header(raw: list[str]) -> tuple[Header, list[str]]:
     parsed: Header = Header(date, title)
     return (parsed, raw[1:])
 
-def parse_row(raw: list[str]) -> tuple[Row, list[str]]:
-    pass
+
+def parse_row(raw: list[str]) -> tuple[Record | None, list[str]]:
+    for i, line in enumerate(raw):
+        line = line.strip()
+
+        # Skip empty
+        if not line:
+            continue
+
+        # Split by pipe for columns, strip whitespace,
+        # and skip columns that are all dashes
+        columns: list[str] = [
+            s.strip() for s in line.split("|") if not DASH_MATCHER.match(s)
+        ]
+        if len(columns) != 5 and not any(columns):
+            continue
+
+        # Skip header
+        col_titles: list[str] = ["parid", "taxyr", "jur", "procedure", "errmsg"]
+        for col, title in zip(columns, col_titles):
+            col = col.strip().lower()
+            if col != title:
+                break
+
+        # Skip butchered column with page number
+        # if
+
+        tax_year: int | None = None
+        jur: int | None = None
+
+        try:
+            tax_year = int(columns[1])
+            jur = int(columns[2])
+        except ValueError:
+            pass
+
+        return (Record(columns[0], tax_year, jur, columns[3], columns[4]), raw[i + 1 :])
+
+    # Raw is exhausted therefore there are no more valid rows
+    return (None, [])
+
 
 """Parse a PDF log into a CSV."""
+
+
 def log_parser(path: Path):
     records: list[str] = extract_text(path).splitlines()
 
@@ -63,16 +110,20 @@ def log_parser(path: Path):
     # Process each record after skipping the title row
     for record in records[1:]:
         # Skip "-----", dates, and empty rows
-        if "-----" in record or any(char.isdigit() for char in record) or not record.strip():
+        if (
+            "-----" in record
+            or any(char.isdigit() for char in record)
+            or not record.strip()
+        ):
             print(f"Skipping record: {record}")
             continue
 
         # Concatenate lines until a complete record is obtained
-        while '|' not in record:
-            record += next(records[1:], '')
+        while "|" not in record:
+            record += next(records[1:], "")
 
         # Split the record into fields delimited with '|'
-        fields: list[str] = record.split('|')
+        fields: list[str] = record.split("|")
 
         # Check if the number of fields is correct (assuming at least 5 fields)
         if len(fields) >= 5:
@@ -93,4 +144,3 @@ def log_parser(path: Path):
     print(f"jurs: {jurs}")
     print(f"procedures: {procedures}")
     print(f"errgmsg: {errmsgs}")
-
