@@ -1,5 +1,6 @@
 import datetime
 import logging
+from typing import Self
 import regex as re
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,16 +13,20 @@ DASH_MATCHER: re.Pattern = re.compile("^-+$")
 @dataclass
 class Record:
     par_id: str
-    tax_year: int
-    jur: int
+    tax_year: int | None
+    jur: int | None
     procedure: str
     error: str
 
 
+@dataclass
 class AALog:
     date: datetime.date | None
     title: str
     records: list[Record]
+
+    def to_csv(self: Self):
+        raise NotImplementedError()
 
 
 @dataclass
@@ -97,50 +102,27 @@ def parse_row(raw: list[str]) -> tuple[Record | None, list[str]]:
 """Parse a PDF log into a CSV."""
 
 
-def log_parser(path: Path):
-    records: list[str] = extract_text(path).splitlines()
+def log_parser(path: Path) -> AALog:
+    raw: list[str] = extract_text(path).split("|")
 
-    # Process records by splitting on '|'
-    parids: list[str] = []
-    taxyrs: list[str] = []
-    jurs: list[str] = []
-    procedures: list[str] = []
-    errmsgs: list[str] = []
+    header: Header
+    (header, raw) = parse_header(raw)
 
-    # Process each record after skipping the title row
-    for record in records[1:]:
-        # Skip "-----", dates, and empty rows
-        if (
-            "-----" in record
-            or any(char.isdigit() for char in record)
-            or not record.strip()
-        ):
-            print(f"Skipping record: {record}")
-            continue
+    # Try to parse each row
+    rows: list[Record] = []
+    while raw:
+        row: Record | None = None
+        (row, new_raw) = parse_row(raw)
+        raw = new_raw
 
-        # Concatenate lines until a complete record is obtained
-        while "|" not in record:
-            record += next(records[1:], "")
+        if row:
+            rows.append(row)
 
-        # Split the record into fields delimited with '|'
-        fields: list[str] = record.split("|")
+    if raw:
+        logging.warning("Extra data found after parsing completed")
+        logging.debug(f"Extra data: {raw}")
 
-        # Check if the number of fields is correct (assuming at least 5 fields)
-        if len(fields) >= 5:
-            # Extract and process the fields
-            parids.append(fields[0].strip())
-            taxyrs.append(fields[1].strip())
-            jurs.append(fields[2].strip())
-            procedures.append(fields[3].strip())
-            errmsgs.append(fields[4].strip())
-        else:
-            # Handle cases where the record does not match the expected structure
-            print(f"Skipping record (incorrect structure): {record}")
+    if not rows:
+        logging.warning("Parser deserialized zero rows")
 
-        # TODO: Save to CSV
-
-    print(f"parids: {parids}")
-    print(f"taxyrs: {taxyrs}")
-    print(f"jurs: {jurs}")
-    print(f"procedures: {procedures}")
-    print(f"errgmsg: {errmsgs}")
+    return AALog(header.date, header.title, rows)
